@@ -36,6 +36,19 @@
       ],
       "deps": [
         {
+          "name": "jquery",
+          "version": "3.6.0",
+          "src": {
+            "href": "jquery-3.6.0"
+          },
+          "meta": null,
+          "script": "jquery-3.6.0.min.js",
+          "stylesheet": null,
+          "head": null,
+          "attachment": null,
+          "all_files": true
+        },
+        {
           "name": "dt-core",
           "version": "1.10.20",
           "src": {
@@ -53,23 +66,10 @@
           "all_files": false
         },
         {
-          "name": "jquery",
-          "version": "1.11.3",
-          "src": {
-            "href": "jquery-1.11.3"
-          },
-          "meta": null,
-          "script": "jquery.min.js",
-          "stylesheet": null,
-          "head": null,
-          "attachment": null,
-          "all_files": true
-        },
-        {
           "name": "crosstalk",
-          "version": "1.1.0.1",
+          "version": "1.1.1",
           "src": {
-            "href": "crosstalk-1.1.0.1"
+            "href": "crosstalk-1.1.1"
           },
           "meta": null,
           "script": "js/crosstalk.min.js",

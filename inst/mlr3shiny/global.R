@@ -12,6 +12,7 @@ library(readxl)
 library(stringr)
 library(plyr)
 library(purrr)
+requireNamespace("mlr3measures")
 
 userhelp <- list(Data = c(paste("This app let's you conduct the basic steps of a machine learning workflow using your own data.",
                                 "You can navigate over the different sections by clicking on each tab. They are chronologically ordered.",
@@ -43,7 +44,10 @@ userhelp <- list(Data = c(paste("This app let's you conduct the basic steps of a
                           paste("Two examplary tasks are provided. Otherwise, select the imported training data and set a target name and a task ID.",
                                 "On the right-hand side you can drop features, meaning disregarding a variable from the dataset and thereby changing the view of the task.",
                                 "This is useful for variables that do not provide an information gain such as an ID or a feature with only one level over all observations.",
-                                "To inspect the data, return to the 'Data' tab.", sep = " ")),
+                                "To inspect the data, return to the 'Data' tab.",
+                                "If it is a two class classification some evaluation metrics such as precision or recall look at 'positive' and 'negative' classes of the target variable.",
+                                "If this needs changing, you can set the class that shall be seen as the positive one here.",
+                                sep = " ")),
 
                  Learner = c(paste("Different machine-learning algorithms can be selected via 'learners' which",
                                    "are objects that provide an interface to the actual algorithm and store meta information. They are depicted on the right-hand side",
@@ -56,7 +60,7 @@ userhelp <- list(Data = c(paste("This app let's you conduct the basic steps of a
                                    "are available for both.", "Each learner has hyperparameters of wich an extract is available under 'parameter settings'",
                                    "to adjust the learner during the training phase to the present dataset for a better model.",
                                    "The predict type can be changed to align with the requirements for certain measures and more.",
-                                   "If further information are needed, visist the GitHub repository in which all packages and algorithms are referenced",
+                                   "If further information are needed, visit the GitHub repository in which all packages and algorithms are referenced",
                                    sep = " "),
                              paste("Decision Trees are adjustable via:",
                                    "xval - number of cross validations while computing the tree (set as static parameter)",
@@ -75,7 +79,7 @@ userhelp <- list(Data = c(paste("This app let's you conduct the basic steps of a
                                    #"radial kernel - kernel with very local behaviour",
                                    "cost - cost of constraint violations (allowed missclassifications)",
                                    "gamma - defines how far the influence of an observation reaches (low: far; high: close)",
-                                   "degree - changes the decision boundary of the model to be more flexible towards the data",sep = "<br/>")),
+                                   "degree - changes the decision boundary of the model to be more flexible towards the data", sep = "<br/>")),
                  Evaluate = c(paste("During the basic machine-learning workflow an algorithm is trained on a subset of the imported data, the training data,",
                                     "and evaluated on the remaining part of it, the test dataset.",
                                     "The target variable is predicted both for the training and test dataset in order to be able to compare different",
@@ -83,10 +87,12 @@ userhelp <- list(Data = c(paste("This app let's you conduct the basic steps of a
                                     "After predicting the target, a measure can be selected to score the performance of the trained model on both datasets.",
                                     "Alternatively, it is also possible to evaluate a learner using one of several resampling strategies such as holdout, cross-validation or bootstrap.",sep = " "),
                               paste("After creating learners in the 'learner'-tab, one can be selected for model training.",
-                                    "The trained model serves to make a prediction for the response of the target.",
-                                    "Different measures are available for performance evaluation afterwards.",
-                                    "The classification error (ce) and accuracy (acc) can be selected as measures to score classification problems.",
-                                    "In return, mean absolute error (mae) and mean standard error (mse) are available for regression problems.")),
+                                    "The trained model serves to make a prediction for the target variable.",
+                                    "Different measures are available for performance evaluation afterwards depending on the characteristics of the task and the learner.",
+                                    "Classification metrics differ between two class vs multi class prediction problems. Certain measures require probabilities to be computed.",
+                                    "This can be specified under Learner - Change Predict Type.",
+                                    "<p>Further information on each measure can be found in the <a href='https://mlr3measures.mlr-org.com/reference/index.html'>mlr3 function reference</a>.</p>"
+                                )),
                  Resample = c(paste("Resampling offers the possibility of training the same learner several times on different subsets of the",
                                     "training data.",
                                     "In doing so multipe models are generated, each differing slightly from the others.",
@@ -148,9 +154,44 @@ learnerparams <- list(ranger = c("num.trees", "mtry", "min.node.size"),
                      supportvm = c("kernel", "cost", "gamma", "degree")
                       )
 
-possiblemeasures <- list(classif = c("classif.acc", "classif.ce"),
-                         regr = c("regr.mae", "regr.mse"))
 
+msr_translations <- data.table(key_msr = c('classif.acc', 'classif.bacc', 'classif.ce', 'classif.logloss',
+                                           'classif.auc', 'classif.fnr', 'classif.fpr', 'classif.npv',
+                                           'classif.precision', 'classif.specificity', 'classif.recall',
+                                           'regr.mae', 'regr.mse', 'regr.rmse', 'regr.rsq'),
+                               name = c('accuracy', 'balanced accuracy', 'classification error', 'log loss',
+                                        'area under the ROC curve', 'false negative rate', 'false positive rate', 'negative predictive value',
+                                        'positive predictive value (precision)', 'true negative rate (specificity)', 'true positive rate (recall/sensitivity)',
+                                        'mean absolute error', 'mean squared error', 'root mean squared error', 'r squared'
+))
+
+avail_msrs <- as.data.table(mlr_measures) # get all mlr3 measures
+get_msrs <- function(current_task, current_learner, available_measures, measure_translations){
+  # Checks for task type and subtype and returns available measures for input selection option
+  # parameters: current task, current_learner, all measures, measure translations
+  # output: mlr3 measure and real name
+
+  make_named_vec <- function(options) {
+    temp_opts <- as.list(options[[1]])
+    names(temp_opts) <- options[[2]]
+    return(temp_opts)
+  }
+  if (current_task$task_type == 'regr'){
+    keys <- available_measures[which(available_measures$task_type == current_task$task_type)][['key']]
+  }
+  # check for classif as regression has no subtypes (properties)
+  else if (current_task$task_type == 'classif' & current_task$properties == 'twoclass') {
+    keys <- available_measures[which(available_measures$task_type == current_task$task_type &
+                                       available_measures$predict_type == current_learner$predict_type)][['key']]
+  }
+  else  {
+    keys <- intersect(available_measures[which(available_measures$task_type == current_task$task_type &
+                                                 available_measures$predict_type == current_learner$predict_type)][['key']],
+                      available_measures[which(sapply(available_measures$task_properties, function(x) !is.element('twoclass', x)))][['key']])
+  }
+  options <- measure_translations[which(measure_translations$key_msr %in% keys), ]
+  return(make_named_vec(options))
+}
 
 # condition handling
 errorModal <- function(title, description, id, err) {
@@ -211,6 +252,17 @@ errorAlertBench <- function(error) {
                                  "one of the selected learners is incompatible with some of the training data or",
                                  "the test data contain new factor levels that the model cannot handle.",
                                  "Otherwise, please have a look at the error message to get insight into the cause.", sep = " "),
+             err = error$message,
+             id = "okBench")
+}
+
+errorAlertBenchAggr <- function(error) {
+  errorModal(title = "Benchmark Aggregation Failed",
+             description = paste("Sorry, calculating an aggregated performance for the benchmark failed.",
+                                 "Most likely, the selected learners have different prediction types.",
+                                 "For the calculation to succeed, all learners need the same prediction type - response or probability.",
+                                 "You can set the prediction type in the Learner-Tab.",
+                                 sep = " "),
              err = error$message,
              id = "okBench")
 }
