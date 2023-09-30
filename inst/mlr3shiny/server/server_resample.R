@@ -68,7 +68,7 @@ stratify <- function(id, default) {
 ratio <- function(id, default) {
   ratioui <- tagList(
     column(6,
-           numericInput(inputId = paste0(id, "_ratio"), label = h5("Fraction in (0, 1) of the data used for training the model"), value = default, min = 0, max = 1)
+           numericInput(inputId = paste0(id, "_ratio"), label = h5("Fraction in (0, 1) of the data used for training the model"), value = default, min = 0, max = 1, step = 0.1)
            )
   )
   return(ratioui)
@@ -144,10 +144,11 @@ getResMeasuresUi <- function() {
       column(6,
              selectizeInput(inputId = "Res_measures", label = NULL,
                             choices = get_msrs(currenttask$task, Res$Current_Learner, avail_msrs, msr_translations),
-                            options = list(
-                              placeholder = 'Nothing selected',
-                              onInitialize = I('function() { this.setValue(""); }')
-                            ),
+                            # options = list(
+                            #   placeholder = 'Nothing selected',
+                            #   onInitialize = I('function() { this.setValue(""); }')
+                            # ),
+                            selected = get_msrs(currenttask$task, Wf$Current_Learner, avail_msrs, msr_translations)[1],
                             multiple = TRUE)
       ),
       column(6,
@@ -300,14 +301,6 @@ observeEvent(input$Res_learner, {
   resetRes()
   Res$Current_Learner <- get(input$Res_learner)$Learner$clone(deep = TRUE)
   Res$Overview <- createResOverview()
-})
-
-observe({
-  if (!is.null(Res$Current_Learner) && get(input$Res_learner)$Hash != Res$Current_Learner$hash) {
-    resetRes()
-    Res$Current_Learner <- get(input$Res_learner)$Learner$clone(deep = TRUE)
-    Res$Overview <- createResOverview()
-  }
 })
 
 observeEvent(currenttask$task, {

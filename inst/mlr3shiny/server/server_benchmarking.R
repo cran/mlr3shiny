@@ -55,7 +55,7 @@ getItersOv <- function() {
     return("[not available]")
   }
   else {
-    return(paste(nrow(Bench$Bench_Rslt$data), "iterations in", uniqueN(Bench$Bench_Rslt$data$hash),"resamplings", sep = " "))
+    return(paste(max(as.data.table(Bench$Bench_Rslt)$iteration), "iterations for", table(as.data.table(Bench$Bench_Rslt)$iteration)[1],"learners", sep = " "))
   }
 }
 
@@ -161,11 +161,11 @@ getBenchMeasuresUi <- function() {
         column(6,
                selectizeInput(inputId = "Bench_measure", label = NULL,
                               choices = get_msrs(currenttask$task, Bench$Current_Learners[[1]], avail_msrs, msr_translations),
-                               options = list(
-                                 placeholder = 'Nothing selected',
-                                 onInitialize = I('function() { this.setValue(""); }')
-                               ),
-                              #selected = possiblemeasures[[currenttask$task$task_type]][[1]],
+                               # options = list(
+                               #   placeholder = 'Nothing selected',
+                               #   onInitialize = I('function() { this.setValue(""); }')
+                               # ),
+                              selected = get_msrs(currenttask$task, Wf$Current_Learner, avail_msrs, msr_translations)[1],
                               multiple = TRUE)
         ),
         column(6,

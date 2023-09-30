@@ -1,5 +1,5 @@
 server <- function(input, output, session) {
-  server_files = list.files(path = "./server", pattern = "*.R")
+  server_files = list.files(path = "./server")
   server_files = paste0("server/", server_files)
   for (i in seq_along(server_files)) {
     source(server_files[i], local = TRUE)
@@ -49,6 +49,8 @@ server <- function(input, output, session) {
           HTML(userhelp[["Learner"]][4]),
           HTML("<br/>", "<br/>"),
           HTML(userhelp[["Learner"]][5]),
+          HTML("<br/>", "<br/>"),
+          HTML(userhelp[["Learner"]][6]),
           easyClose = TRUE,
           footer = div(style = "display:inline-block;width:100%;text-align: center;",
                        modalButton('OK')))
@@ -116,6 +118,20 @@ server <- function(input, output, session) {
           hr(),
           h4("Functionalities:"),
           HTML(userhelp[["Predict"]][2]),
+          easyClose = TRUE,
+          footer = div(style = "display:inline-block;width:100%;text-align: center;",
+                       modalButton('OK')))
+      )
+    }
+    else if (req(input$navbar) == "7. Explain") {
+      showModal(
+        modalDialog(
+          title = h2("Explain your Learners", style = "text-align: center;"),
+          h4("Description:"),
+          HTML(userhelp[["Explain"]][1]),
+          hr(),
+          h4("Functionalities:"),
+          HTML(userhelp[["Explain"]][2]),
           easyClose = TRUE,
           footer = div(style = "display:inline-block;width:100%;text-align: center;",
                        modalButton('OK')))

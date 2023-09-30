@@ -5,7 +5,7 @@ features_to_use <- reactiveValues(features = NULL)
 
 # render sidebarPanel depending on input for Task
 observe({
-  if (input$Task_backend == "iris" || input$Task_backend == "mtcars") {
+  if (input$Task_backend == "iris" || input$Task_backend == "mtcars" || input$Task_backend == "german_credit") {
     currenttask$task <- mlr_tasks$get(input$Task_backend)
   }
   else if (is.null(data$traindata) && input$Task_backend == "imported training data" ) {
@@ -26,6 +26,10 @@ observe({
       )
     })
   }
+})
+
+observeEvent(currenttask$task,{
+  reset_trained_learner_list()
 })
 
 observe({
@@ -132,9 +136,10 @@ output$Task_overview <- renderPrint({
 # Task processing
 
 observeEvent(input$Task_feat_deactivate, {
-    updatedfeat <- setdiff(currenttask$task$feature_names, input$Task_feature)
-    currenttask$task$select(cols = updatedfeat)
-
+    #updatedfeat <- setdiff(currenttask$task$feature_names, input$Task_feature)
+    #currenttask$task$select(cols = updatedfeat)
+    currenttask$task$select(cols = input$Task_feature)
+  
     ## here we need to update currenttask$features, so that Shiny recognizes that the R6- task - object has changed
     currenttask$featTypes <- currenttask$task$feature_types
     currenttask$featNames <- currenttask$task$feature_names
@@ -145,6 +150,20 @@ observeEvent(input$Task_change_pos_class, {
   ## here we need to update currenttask$positive, so that Shiny recognizes that the R6- task - object has changed
   currenttask$positive <- currenttask$task$positive
 })
+
+observeEvent(input$Task_robustify, {
+  if(!input[["Task_robustify"]]){
+    shinyalert(title = "Notification",
+               text = "Robustify data preprocessing disabled. 
+                       Note that this might lead to an error 
+                       when training a learner if the chosen
+                       learner can not deal with all variable types 
+                       in the original data.",
+               animation = FALSE, closeOnClickOutside = TRUE)
+  }
+})
+
+
 
 printTaskProcessingUI <- function(){
   tagList(
@@ -162,18 +181,52 @@ printTaskProcessingUI <- function(){
                column(4, actionButton(inputId = "Task_change_pos_class", label = "Change", style = "float: right;")))
     },
     fluidRow(
-      column(4, h5("Drop Features: ")),
-      column(4, selectizeInput(inputId = "Task_feature", label = NULL,
-                            choices = c(currenttask$featNames),
-                            options = list(
-                              placeholder = 'Nothing selected',
-                              onInitialize = I('function() { this.setValue(""); }')
-                            ),
-                            multiple = TRUE)
+      column(4, h5("Select Features: ")),
+      column(4,  pickerInput("Task_feature",
+                             choices = c(currenttask$featNames),
+                             multiple = TRUE,
+                             selected = c(currenttask$featNames),
+                             options = pickerOptions(
+                               #  list(
+                               #   placeholder = 'Nothing selected',
+                               #   onInitialize = I('function() { this.setValue(""); }')
+                               # )
+                               list(`actions-box` = TRUE)
+                               )
+                             )
              ),
-      column(4, actionButton(inputId = "Task_feat_deactivate", label = "Drop", style = "float: right;"))
+      #now select instead of dtop / deactivate
+      column(4, actionButton(inputId = "Task_feat_deactivate", label = "Select", style = "float: right;"))
+    ),
+    fluidRow(
+      column(4, h5("Robustify: ")),
+      column(8, checkboxInput(inputId = "Task_robustify", label = "apply mlr3 robustify preprocessing to data", value = TRUE),
+                conditionalPanel(condition = "input[[\"Task_robustify\"]] == true",
+                                 checkboxInput("robustify_details", label = "Show detailed options for robustification", value = FALSE)),
+                conditionalPanel(condition = "input[[\"robustify_details\"]] == true",
+                                 selectInput("impute_missings", "impute_missings", list("NULL" = "NULL", "TRUE" = "TRUE", "FALSE" = "FALSE"), selected = "NULL")),
+                conditionalPanel(condition = "input[[\"robustify_details\"]] == true",
+                                 selectInput("factors_to_numeric", "factors_to_numeric", list("NULL" = "NULL", "TRUE" = "TRUE", "FALSE" = "FALSE"), selected = "NULL")),
+                conditionalPanel(condition = "input[[\"robustify_details\"]] == true",
+                                 numericInput("max_cardinality", label = "max_cardinality", value = 1000, min = 2)),
+                conditionalPanel(condition = "input[[\"robustify_details\"]] == true",
+                                 selectInput("ordered_action", "ordered_action", 
+                                             list("factor" = "factor", "factor!" = "factor!", "matrix" = "matrix", "matrix!" = "matrix!",
+                                                  "ignore" = "ignore", "ignore!" = "ignore!"), selected = "factor")),
+                conditionalPanel(condition = "input[[\"robustify_details\"]] == true",
+                                 selectInput("character_action", "character_action", 
+                                             list("factor" = "factor", "factor!" = "factor!", "matrix" = "matrix", "matrix!" = "matrix!",
+                                                  "ignore" = "ignore", "ignore!" = "ignore!"), selected = "factor")),
+                conditionalPanel(condition = "input[[\"robustify_details\"]] == true",
+                                 selectInput("POSIXct_action", "POSIXct_action", 
+                                             list("numeric" = "numeric", "numeric!" = "numeric!", "datefeatures" = "datefeatures", "datefeatures!" = "datefeatures!",
+                                                  "ignore" = "ignore", "ignore!" = "ignore!"), selected = "factor"))
+             
+             )
     )
+    
   )
+
 }
 
 

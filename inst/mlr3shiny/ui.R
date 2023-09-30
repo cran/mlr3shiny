@@ -1,4 +1,4 @@
-ui_files <- list.files(path = "./ui", pattern = "*.R")
+ui_files <- list.files(path = "./ui")
 ui_files <- paste0("ui/", ui_files)
 
 for (i in seq_along(ui_files)) {
@@ -24,13 +24,12 @@ ui <- tagList(
     )
   ),
   useShinyjs(),
-  useShinyalert(),
   circleButton(
     inputId = "Help", icon = icon("question"),
     status = "white", size = "sm", style = "position:absolute; right:2em; top:0.35em; z-index:1001; color: #2FA4E7;"
   ),
   navbarPage(
-    theme = shinytheme('cerulean'),
+    theme =  bs_theme(version = 3, bootswatch = 'cerulean'),
     title = a("mlr3shiny", href = "https://github.com/LamaTe/mlr3shiny", target = "_blank", style = "color: white;"),
     windowTitle = "mlr3shiny",
     id = "navbar",
@@ -63,6 +62,10 @@ ui <- tagList(
       tabpanel_predict,
       icon = icon("search"),
       id = 'predict'
+    ),
+    tabPanel("7. Explain",
+    tabpanel_evaluating,
+    icon = icon("chalkboard-teacher")
     )
   )
 )

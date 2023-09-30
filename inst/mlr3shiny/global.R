@@ -1,8 +1,13 @@
 library(shiny)
 library(mlr3)
 library(mlr3learners)
+library(mlr3pipelines)
+library(DALEX)
+library(DALEXtra)
+library(Metrics)
+library(plyr)
+library(dplyr)
 library(DT)
-library(shinythemes)
 library(shinydashboard)
 library(shinyjs)
 library(shinyWidgets)
@@ -10,8 +15,14 @@ library(shinyalert)
 library(data.table)
 library(readxl)
 library(stringr)
-library(plyr)
 library(purrr)
+library(stringr)
+library(bslib)
+library(haven)
+library(igraph)
+library(xgboost)
+
+
 requireNamespace("mlr3measures")
 
 userhelp <- list(Data = c(paste("This app let's you conduct the basic steps of a machine learning workflow using your own data.",
@@ -38,55 +49,60 @@ userhelp <- list(Data = c(paste("This app let's you conduct the basic steps of a
                                               "These features will be disabled and not used to train your model.")),
                  Task = c(paste("A task is an object to store the training dataset as backend and additional information about it as meta information.",
                                 "These are needed due to the particular requirements of a machine-learning problem and e.g. include the target variable and specific roles for other variables.",
-                                "Moreover, the meta information store the task type such as a classification or a regression.",
+                                "Moreover, the meta information holds the task type such as a classification or a regression.",
                                 "If the target variable is of type numeric, the task will be of type regression. If the target is a factor,",
                                 "the task is a classification and can predict either a target with two levels (two class) or a target with multiple classes (multiclass).", sep = " "),
-                          paste("Two examplary tasks are provided. Otherwise, select the imported training data and set a target name and a task ID.",
-                                "On the right-hand side you can drop features, meaning disregarding a variable from the dataset and thereby changing the view of the task.",
-                                "This is useful for variables that do not provide an information gain such as an ID or a feature with only one level over all observations.",
+                          paste("Three examplary tasks are provided. Otherwise, select the imported training data and set a target name and a task ID.",
+                                "On the right-hand side you can select features in case only a subset of variables available in the dataset should be included in the ML experiment.",
+                                "This is useful to exclude variables that do not provide an information gain such as an ID or a feature with only one level over all observations.",
                                 "To inspect the data, return to the 'Data' tab.",
                                 "If it is a two class classification some evaluation metrics such as precision or recall look at 'positive' and 'negative' classes of the target variable.",
                                 "If this needs changing, you can set the class that shall be seen as the positive one here.",
                                 sep = " ")),
 
-                 Learner = c(paste("Different machine-learning algorithms can be selected via 'learners' which",
-                                   "are objects that provide an interface to the actual algorithm and store meta information. They are depicted on the right-hand side",
-                                   "under the sections 'overview' and 'parameters' and include necessary settings such as the predict type,",
-                                   "the current hyperparameter values and other properties. Predict types can be response or probability for",
-                                   "the target of a classification task and response or standard error for a regression task, depending on the algorithm.",
+                 Learner = c(paste("Different machine-learning algorithms can be selected as 'learners' which",
+                                   "provide an interface to the actual algorithm together wirth some meta information such as the predict type,",
+                                   "and its current hyperparameter settings. For classification tasks predict types can be response or probability.",
                                    sep = " "),
-                             paste("Currently, one can select the algorithms: decision tree, random forest, support vector machine, logistic regression and",
-                                   "linear regression. While logistic reg. is used for a classification task and linear reg. for a regression task, the others",
-                                   "are available for both.", "Each learner has hyperparameters of wich an extract is available under 'parameter settings'",
-                                   "to adjust the learner during the training phase to the present dataset for a better model.",
-                                   "The predict type can be changed to align with the requirements for certain measures and more.",
-                                   "If further information are needed, visit the GitHub repository in which all packages and algorithms are referenced",
+                             paste("Currently, one can select the among algorithms: decision tree, random forest, xgboost, support vector machine.",
+                                   "In addition logistic regression is available for classification and linear regression for regression.",
+                                   "For each learner the most important hyperparameters can be specified under 'Learner Parameters' ",
+                                   "in order to improve predictive power.",
+                                   "The predict type can be changed to align with the requirements w.r.t. particular measures or desired usage of the model.",
+                                   "For further information, visit the GitHub repository where all packages and algorithms are referenced.",
                                    sep = " "),
-                             paste("Decision Trees are adjustable via:",
-                                   "xval - number of cross validations while computing the tree (set as static parameter)",
-                                   "minsplit - minimum number of observations in a node before performing a split",
-                                   "cp - complexity parameter to prevent a split if overvall lack of fit is not decreased by the factor of cp",
-                                   "maxdepth - maximum depth of any node of the tree", sep = "<br/>"),
-                             paste("Random Forests are adjustable via:",
-                                   "num.trees - number of trees used for prediction",
-                                   "mtry - number of features that are considered for splitting a node",
-                                   "min.node.size - minimal node size to stop this node from splitting",
+                             paste("Decision trees are adjustable via:",
+                                   "minsplit - minimum number of observations in a node before performing a split,",
+                                   "cp - larger complexity parameters > 0 prevents a split for small improvements,",
+                                   "maxdepth - maximum depth of any node of the tree,", sep = "<br/>"),
+                             paste("Random forests are adjustable via:",
+                                   "num.trees - number of trees used for prediction,",
+                                   "mtry - number of features that are considered for splitting a node,",
+                                   "min.node.size - minimal node size to stop this node from splitting,",
                                    sep = "<br/>"),
-                             paste("Support Vector machines are adjustable via:",
-                                   "kernel - a kernel function to quantify the similarity of two observations",
+                             paste("Support vector machines are adjustable via:",
+                                   "kernel - a kernel function to quantify the similarity of two observations,",
                                    #"linear kernel - expects a linear relationship between a pair of observations and quantifies the similarity using standard correlation",
-                                   #"polynomial kernel - fitting the sv classifier into a higher dimensinoal feature space",
+                                   #"polynomial kernel - fitting the sv classifier into a higher dimensional feature space",
                                    #"radial kernel - kernel with very local behaviour",
-                                   "cost - cost of constraint violations (allowed missclassifications)",
-                                   "gamma - defines how far the influence of an observation reaches (low: far; high: close)",
-                                   "degree - changes the decision boundary of the model to be more flexible towards the data", sep = "<br/>")),
+                                   "cost - cost of constraint violations (allowed missclassifications),",
+                                   "gamma - defines how far the influence of an observation reaches (low: far; high: close),",
+                                   "degree - a higher polynomial degree increases adaptivity to data,", sep = "<br/>"),
+                             paste("xgboost is adjustable via:",
+                                   "eta - controls the learning rate: scales the contribution of each tree by a factor < 1.
+                                    A lower value for eta is more robust to overfitting but requires larger value of nrounds,",
+                                   "max_depth - maximum depth of a tree,",
+                                   "nrounds - maximum number of boosting iterations,",
+                                   "colsample_bytree - subsample ratio of columns when constructing each tree,",
+                                   "booster - which booster to use.",
+                                   sep = "<br/>")),
                  Evaluate = c(paste("During the basic machine-learning workflow an algorithm is trained on a subset of the imported data, the training data,",
                                     "and evaluated on the remaining part of it, the test dataset.",
                                     "The target variable is predicted both for the training and test dataset in order to be able to compare different",
                                     "hyperparameter settings and take care of overfitting (loss of generalizability to new data).",
                                     "After predicting the target, a measure can be selected to score the performance of the trained model on both datasets.",
                                     "Alternatively, it is also possible to evaluate a learner using one of several resampling strategies such as holdout, cross-validation or bootstrap.",sep = " "),
-                              paste("After creating learners in the 'learner'-tab, one can be selected for model training.",
+                              paste("After creating learners in the 'learner'-tab, one learner can be selected for model training.",
                                     "The trained model serves to make a prediction for the target variable.",
                                     "Different measures are available for performance evaluation afterwards depending on the characteristics of the task and the learner.",
                                     "Classification metrics differ between two class vs multi class prediction problems. Certain measures require probabilities to be computed.",
@@ -137,21 +153,51 @@ userhelp <- list(Data = c(paste("This app let's you conduct the basic steps of a
                                    "The resulting object can be downloaded for future use",
                                    "A new dataset can be imported with the same procedure as before.",
                                    "Afterwards, the trained model can be used to make a prediction which is displayed on the left-hand side.",
-                                   "The prediction can be downloaded either as a csv-file or as a rds-file if it is to be included directly in another R session."))
-                 )
+                                   "The prediction can be downloaded either as a csv-file or as a rds-file if it is to be included directly in another R session.")),
+                 
+                 Explain = c(paste("For further use in different domains, it can be of considerable advantage to understand the internal 
+                 \"ways of thinking\" of the algorithms used, which lead to the eventual calculation of the results. 
+                 Following the Explainable AI approach, model agnostic methods are used here via the 
+                 <a href='https://github.com/ModelOriented/DALEX'>DALEX</a> framework to graphically analyse your model.
+                 Implemented are feature importance, as well as methods for specific feature analysis with PD-Plots and ALE-Plots.
+                 As a result, even more complex models can be made relatively easy to understand, 
+                 which can be particularly useful in arguing for the use of machine learning in newer 
+                 application areas. 
+                 <p> More information regarding responsible machine learning can be found on the
+                 <a href=\"https://dalex.drwhy.ai\">DALEX</a> website, 
+                 which is in close relation to the package itself.</p>",
+                 sep = " "),
+                 paste("After selecting a learner that has been trained on all data in advance, 
+                 the applied methods can be selected via the checkboxes.
+                 <h4>Feature Importance </h4>
+                 For the feature importance, you can select the applied loss-function as well as the compare method.
+                 The compare method can be used to select whether the importance should be displayed as a difference 
+                 or as a ratio. 
+                 After the computation, you will see a plot of the different features and bars indicating their loss.
+                 The higher the loss is, the more influence the feature has on the target variable.
+                 <h4> Specific feature analysis </h4> 
+                  For the feature analysis, you can pick between PD-Plots, ALE-Plots and ICE-Plots. 
+                  You can pick features manually with the manual select option or choose a number of
+                  features to be picked automaticially, if you choose the automatic option.
+                  (Currently, it is only able to display one type of feature (numeric, ordered etc.) at a time).
+                  The displayed plots visualize how the values of selected features influence the final prediction.")
 
+                 )
+)
 
 #future TO-DO: implement additional learners, ultimately replace vector with as.data.table(mlr_learners)
-possiblelearners <- c("Logistic Regression" = "classif.log_reg",
-                      "Random Forest" = "classif.ranger", "Random Forest" = "regr.ranger",
-                      "Decision Tree" = "classif.rpart",  "Decision Tree" = "regr.rpart",
-                      "Support Vector Machine" = "classif.svm", "Support Vector Machine" = "regr.svm",
-                      "Linear Regression" = "regr.lm")
+possiblelearners <- c("Logistic Regression" = "log_reg",
+                      "Random Forest" = "ranger",
+                      "Decision Tree" = "rpart",
+                      "Support Vector Machine" = "svm",
+                      "Linear Regression" = "lm",
+                      "Extreme Gradient Boosting (xgboost)" = "xgboost")
 
 #log_reg and lm without params
 learnerparams <- list(ranger = c("num.trees", "mtry", "min.node.size"),
                      rpart = c("minsplit", "cp", "maxdepth"),
-                     supportvm = c("kernel", "cost", "gamma", "degree")
+                     supportvm = c("kernel", "cost", "gamma", "degree"),
+                     xgboost = c("eta", "max_depth", "nrounds", "colsample_bytree", "booster")
                       )
 
 
@@ -181,9 +227,10 @@ get_msrs <- function(current_task, current_learner, available_measures, measure_
   }
   # check for classif as regression has no subtypes (properties)
   else if (current_task$task_type == 'classif' & current_task$properties == 'twoclass') {
-    keys <- available_measures[which(available_measures$task_type == current_task$task_type &
-                                       available_measures$predict_type == current_learner$predict_type)][['key']]
-  }
+    keys <- available_measures[which(available_measures$task_type == 'classif' &
+                                       available_measures$predict_type == 'response' |
+                                       available_measures$predict_type == 'prob')][['key']]
+      }
   else  {
     keys <- intersect(available_measures[which(available_measures$task_type == current_task$task_type &
                                                  available_measures$predict_type == current_learner$predict_type)][['key']],
